@@ -33,12 +33,26 @@ if (!htmlEntry) {
 
 const origHtmlSize = parseInt(htmlEntry.size)
 const origHtmlOffset = parseInt(htmlEntry.offset)
-const htmlContent = buf.slice(dataStart + origHtmlOffset, dataStart + origHtmlOffset + origHtmlSize).toString("utf8")
+var htmlContent = buf.slice(dataStart + origHtmlOffset, dataStart + origHtmlOffset + origHtmlSize).toString("utf8")
 
 const marker = "opencode-rtl-fix"
+const markerScriptStart = '<script id="' + marker + '">'
+const markerScriptEnd = '</script>'
+var isRepatch = false
+
 if (htmlContent.includes(marker)) {
-  console.log("Already patched! Skipping.")
-  process.exit(0)
+  var scriptStart = htmlContent.indexOf(markerScriptStart)
+  var scriptEnd = htmlContent.indexOf(markerScriptEnd, scriptStart)
+  if (scriptStart !== -1 && scriptEnd !== -1) {
+    var before = htmlContent.substring(0, scriptStart)
+    var after = htmlContent.substring(scriptEnd + markerScriptEnd.length)
+    htmlContent = before + after
+    isRepatch = true
+    console.log("Found old patch, removed. Re-patching...")
+  } else {
+    console.log("Already patched! Skipping.")
+    process.exit(0)
+  }
 }
 
 const rtlRegex = new RegExp("[" +
@@ -62,53 +76,89 @@ const rtlScript = [
   "    )",
   "  }",
   "  var style = document.createElement('style');",
-  "  style.textContent = \"@font-face{font-family:'Vazirmatn';font-style:normal;font-weight:100 900;font-display:swap;src:url(https://fonts.gstatic.com/s/vazirmatn/v16/Dxxo8j6PP2D_kU2muijlGMWWMmk.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}\";",
+  "  style.textContent = [",
+  "    \"@font-face{font-family:'Vazirmatn';font-style:normal;font-weight:100 900;font-display:swap;src:url(https://fonts.gstatic.com/s/vazirmatn/v16/Dxxo8j6PP2D_kU2muijlGMWWMmk.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}\",",
+  "    \"[data-oc-rtl='1']{unicode-bidi:embed !important;font-family:'Vazirmatn',sans-serif !important}\",",
+  "    \"[data-oc-rtl='0']{unicode-bidi:embed !important}\",",
+  "    \"code,pre,.xterm{direction:ltr !important;unicode-bidi:isolate !important}\"",
+  "  ].join('\\n');",
   "  document.head.appendChild(style);",
-  "  var selectors = [",
+  "  var containerSelectors = [",
   '    \'[data-component="markdown"]\',',
   '    \'[data-component="text-part"]\',',
-  '    \'[data-slot="text-part-body"]\',',
-  '    \'[data-slot="user-message-text"]\',',
+  '    \'[data-slot="text-part-body"]\'',
+  '  ].join(",");',
+  "  var textSelectors = [",
   '    \'[data-component="prompt-input"]\',',
+  '    \'[data-slot="user-message-text"]\',',
   '    \'[data-component="markdown"] blockquote\',',
   '    \'[data-component="markdown"] blockquote p\',',
   '    \'[data-component="markdown"] p\',',
-  '    \'[data-component="markdown"] li\'',
+  '    \'[data-component="markdown"] li\',',
+  '    \'[data-component="markdown"] h1\',',
+  '    \'[data-component="markdown"] h2\',',
+  '    \'[data-component="markdown"] h3\',',
+  '    \'[data-component="markdown"] h4\',',
+  '    \'[data-component="markdown"] td\',',
+  '    \'[data-component="markdown"] th\'',
   '  ].join(",");',
+  "  var allSelectors = containerSelectors + \",\" + textSelectors;",
+  "  function hasRtl(text) {",
+  "    for (var i = 0; i < text.length; i++) {",
+  "      if (rtl.test(text[i])) return true;",
+  "    }",
+  "    return false;",
+  "  }",
+  "  function isTextElement(el) {",
+  "    return el.matches(textSelectors);",
+  "  }",
   "  function fix(el) {",
   "    if (!(el instanceof HTMLElement) || isTerminal(el)) return;",
   '    var text = el.innerText || el.textContent || "";',
   "    if (!text.trim()) return;",
-  "    var r = rtl.test(text);",
-  '    el.setAttribute("dir", r ? "rtl" : "ltr");',
-  '    el.style.textAlign = r ? "right" : "left";',
-  '    el.style.unicodeBidi = "plaintext";',
-  "    if (r) el.style.fontFamily = \"'Vazirmatn', sans-serif\";",
-  '    if (r && el.closest("blockquote")) el.style.direction = "rtl";',
+  "    var r = hasRtl(text);",
+  "    var val = r ? '1' : '0';",
+  "    if (el.getAttribute('data-oc-rtl') !== val) {",
+  "      el.setAttribute('data-oc-rtl', val);",
+  "    }",
+  "    el.style.setProperty('font-family', \"'Vazirmatn', sans-serif\", 'important');",
+  "    if (isTextElement(el)) {",
+  "      var dirVal = r ? 'rtl' : 'ltr';",
+  "      if (el.getAttribute('dir') !== dirVal) {",
+  "        el.setAttribute('dir', dirVal);",
+  "      }",
+  "      el.style.setProperty('direction', dirVal, 'important');",
+  "      el.style.setProperty('unicode-bidi', 'embed', 'important');",
+  "      el.style.setProperty('text-align', 'start', 'important');",
+  "    }",
   "  }",
   "  function run() {",
-  "    document.querySelectorAll(selectors).forEach(function(el) {",
+  "    document.querySelectorAll(allSelectors).forEach(function(el) {",
   "      if (!isTerminal(el)) fix(el);",
   "    });",
   "  }",
   "  new MutationObserver(function(mutations) {",
   "    mutations.forEach(function(m) {",
+  "      if (m.type === 'attributes' && m.target instanceof HTMLElement) {",
+  "        if (!isTerminal(m.target)) fix(m.target);",
+  "        return;",
+  "      }",
   "      m.addedNodes.forEach(function(node) {",
   "        if (node instanceof HTMLElement && !isTerminal(node)) {",
-  "          if (node.matches(selectors)) fix(node);",
-  "          node.querySelectorAll(selectors).forEach(fix);",
+  "          if (node.matches(allSelectors)) fix(node);",
+  "          node.querySelectorAll(allSelectors).forEach(fix);",
   "        }",
   "      });",
   "      if (m.type === 'characterData' && m.target.parentElement) {",
   "        var p = m.target.parentElement;",
   "        if (!isTerminal(p)) {",
-  "          var closest = p.closest(selectors);",
+  "          var closest = p.closest(allSelectors);",
   "          if (closest) fix(closest);",
   "        }",
   "      }",
   "    });",
-  "  }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });",
-  "  run();",
+  "  }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'dir', 'data-oc-rtl'] });",
+  "  setTimeout(function(){ run(); setInterval(run, 3000); }, 3000);",
   "})();",
   "</script>"
 ].join("\n")

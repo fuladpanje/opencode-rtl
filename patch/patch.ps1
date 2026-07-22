@@ -118,7 +118,7 @@ $BackupPath = Join-Path $ResourcesDir ("app.asar.backup.{0}" -f (Get-Date -Forma
 
 Write-Host ""
 Write-Host "  ========================================" -ForegroundColor Cyan
-Write-Host "         OpenCode-RTL v2.0.0" -ForegroundColor Cyan
+Write-Host "         OpenCode-RTL v2.1.0" -ForegroundColor Cyan
 Write-Host "  ========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Author : " -NoNewline
