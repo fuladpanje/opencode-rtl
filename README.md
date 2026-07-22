@@ -62,18 +62,6 @@ The script patches the installed `app.asar` **in place** (binary patch, no extra
 
 ---
 
-## Test
-
-Send this in OpenCode:
-
-```
-سلام، این یک تست فارسی است.
-```
-
-Expected: the message is right-aligned and RTL, while English and code stay LTR.
-
----
-
 ## Author
 
 **Reza Fuladpanjeh** — [fuladpanjeh.ir](https://fuladpanjeh.ir)
